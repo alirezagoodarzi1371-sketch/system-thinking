@@ -7,13 +7,16 @@
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    :root{ --bg:#0b1020; --bg2:#0f172a; --card:#0e1324; --muted:#9fb0c7; --text:#e5edf7; --accent:#7dd3fc; --accent2:#a78bfa; }
+    :root{ --bg:#0b1020; --bg2:#0f172a; --muted:#9fb0c7; --text:#e5edf7; --accent:#7dd3fc; --accent2:#a78bfa; }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{font-family:"Vazirmatn",system-ui,sans-serif;margin:0;color:var(--text);
-      background: radial-gradient(1200px 800px at 80% -10%, rgba(124,58,237,.25), transparent 60%),
-                 radial-gradient(1200px 800px at -10% 100%, rgba(14,165,233,.25), transparent 60%),
-                 linear-gradient(180deg, var(--bg), var(--bg2));}
+    body{
+      font-family:"Vazirmatn",system-ui,sans-serif;margin:0;color:var(--text);
+      background:
+        radial-gradient(1200px 800px at 80% -10%, rgba(124,58,237,.25), transparent 60%),
+        radial-gradient(1200px 800px at -10% 100%, rgba(14,165,233,.25), transparent 60%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
+    }
     .wrap{max-width:1200px;margin:0 auto;padding:28px}
     header{display:flex;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
     .brand{display:flex;gap:12px;align-items:center}
@@ -22,9 +25,13 @@
     .muted{color:var(--muted)}
     .grid{display:grid;gap:16px}
     .cols{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));}
-    .card{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.02));
-          border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:18px;backdrop-filter: blur(6px);
-          box-shadow:0 12px 30px rgba(0,0,0,.25)}
+    .card{
+      position:relative;
+      background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:18px;padding:18px;backdrop-filter: blur(6px);
+      box-shadow:0 12px 30px rgba(0,0,0,.25)
+    }
     h2{font-size:18px;margin:4px 0 10px}
     label{display:block;font-size:13px;margin:10px 0 6px;color:var(--muted)}
     input,button{width:100%;background:#0a1225;color:var(--text);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px}
@@ -52,11 +59,11 @@
         <div class="logo">🧠</div>
         <div>
           <h1>بازی تفکر سیستمی: مدیرعامل (Player Only)</h1>
-          <div class="muted">هر ماه سه تصمیم بگیر؛ پیامدهای سیستمی‌اش را ببین.</div>
+          <div class="muted">هر ماه سه تصمیم بگیر؛ پیامدها را در شاخص‌ها و نمودار ببین.</div>
         </div>
       </div>
       <div>
-        <button id="dlCsv" class="btn">دانلود CSV نتایج</button>
+        <button id="dlCsv" class="btn" type="button">دانلود CSV نتایج</button>
       </div>
     </header>
 
@@ -79,9 +86,9 @@
         </div>
 
         <div class="btns">
-          <button class="btn primary" id="nextBtn">ثبت و رفتن به ماه بعد ▶️</button>
-          <button class="btn" id="autoBtn">شبیه‌سازی تا پایان ⏩</button>
-          <button class="btn" id="resetBtn">شروع دوباره ♻️</button>
+          <button class="btn primary" id="nextBtn" type="button">ثبت و رفتن به ماه بعد ▶️</button>
+          <button class="btn" id="autoBtn" type="button">شبیه‌سازی تا پایان ⏩</button>
+          <button class="btn" id="resetBtn" type="button">شروع دوباره ♻️</button>
         </div>
         <p id="alerts" class="muted" style="margin-top:6px"></p>
       </div>
@@ -114,7 +121,14 @@
   </div>
 
 <script>
-// ==== پارامترهای ثابت (Player Only) ====
+function $(id){ return document.getElementById(id); }
+function toNum(x, f=0){ const v=parseFloat(x); return Number.isFinite(v)?v:f; }
+function toInt(x, f=0){ const v=parseInt(x,10); return Number.isFinite(v)?v:f; }
+function nf(x){ return Number(x).toFixed(2); }
+function clamp(x,a,b){ return Math.min(Math.max(x,a),b); }
+function clamp01(x){ return clamp(x,0,1); }
+
+// ثابت‌ها
 const PCONST = {
   Backlog_0:300, Cash_0:200, H_0:0.6, F_0:0.2, C_0:0.5,
   NewWork:20, TargetBacklog:200,
@@ -126,112 +140,114 @@ const PCONST = {
   pi_s:1.4, pi_l:1.1, psi:0.2
 };
 
-// ======= منطق بازی =======
-const months = 12;
-let s = {};
-let m = 1;
-let hist = []; // log rows
-let lastN = null, lastWs = null;
-const $ = (id)=>document.getElementById(id);
+const months=12; let s={}; let m=1; let hist=[]; let lastN=null,lastWs=null; let chart;
 
 function init(){
-  const p = PCONST;
-  s = { p, Backlog:p.Backlog_0, Cash:p.Cash_0, H:p.H_0, F:p.F_0, C:p.C_0, S:p.kappa * p.Backlog_0 / Math.max(1,p.TargetBacklog) };
-  m = 1; hist=[]; lastN=null; lastWs=null; $("mLabel").textContent = m; $("logTbl").querySelector('tbody').innerHTML=""; updateKPIs(null); $("alerts").textContent='';
-  chart.data.labels = []; chart.data.datasets.forEach(ds=> ds.data = []); chart.update();
+  const p=PCONST;
+  s={p,Backlog:p.Backlog_0,Cash:p.Cash_0,H:p.H_0,F:p.F_0,C:p.C_0,S:p.kappa*p.Backlog_0/Math.max(1,p.TargetBacklog)};
+  m=1;hist=[];lastN=null;lastWs=null;
+  $("mLabel").textContent=m;
+  $("logTbl").querySelector("tbody").innerHTML="";
+  updateKPIs(null);$("alerts").textContent="";
+  chart.data.labels=[];chart.data.datasets.forEach(ds=>ds.data=[]);chart.update();
 }
 
 function stepOnce(){
-  if(m>months){return;}
-  const p = s.p;
-  const N = clamp(parseInt($("N").value||0,10),1,8);
-  const TrainPct = clamp(parseFloat($("TrainPct").value||0),0,1);
-  const Ws = clamp(parseFloat($("Ws").value||0),0,1);
-  $("TrainPctBox").value = TrainPct; $("WsBox").value = Ws;
+  if(m>months)return;
+  const p=s.p;
+  const N=clamp(toInt($("N").value,3),1,8);
+  const TrainPct=clamp(toNum($("TrainPct").value,toNum($("TrainPctBox").value,0)),0,1);
+  const Ws=clamp(toNum($("Ws").value,toNum($("WsBox").value,0.6)),0,1);
+  $("TrainPctBox").value=TrainPct;$("WsBox").value=Ws;
 
-  const Wl = 1-Ws; const Train_TM = TrainPct * N; const AvailFrac = Math.max(0, 1 - Train_TM / Math.max(0.0001, N*1.0));
-  const H_prev = s.H, F_prev = s.F, S_prev = s.S;
-  const P_core = p.Pmin + p.gammaH * H_prev; const Denom = 1 + p.gammaS * S_prev + p.gammaF * F_prev; const P = (P_core/Denom) * AvailFrac;
-  const N_prev = (lastN==null? N : lastN); const N_up = Math.max(0, N - N_prev);
-  const EffTeams = Math.max(0, N - (p.phi_coord*N*(N-1)) - (p.phi_onb*N_up));
-  const Ws_prev = (lastWs==null? Ws : lastWs); const PriorityEff = 1 - p.psi * Math.abs(Ws - Ws_prev);
-  const GrossProd = EffTeams * P * PriorityEff; const Q = Math.min(0.9, 0.3 + 0.6 * H_prev);
-  const StressEff = 1 + p.rhoS * S_prev; const ReworkRate = Math.min(0.9, Math.max(0, p.rho0 * StressEff * (1 - Q + p.rhoH*(1 - H_prev))));
-  const Rework = ReworkRate * GrossProd; const Throughput = Math.max(0, GrossProd - Rework);
-  const Backlog_prev = s.Backlog; const Backlog = Backlog_prev - Throughput + p.NewWork; const S = p.kappa * Backlog / Math.max(1, p.TargetBacklog);
-  const F = F_prev + p.eta1 * (N? (GrossProd/N):0) - p.eta2 * (N? (Train_TM/N):0) - p.deltaF * F_prev;
-  const H = H_prev + p.alpha * Train_TM - p.deltaH * H_prev;
-  const Revenue = (p.pi_s * Ws + p.pi_l * Wl) * Throughput; const CoordCost = p.ccoord * N * (N-1);
-  const Cost = p.cteam * N + Train_TM + CoordCost + p.crework * Rework; const Profit = Revenue - Cost;
-  const Cash_prev = s.Cash; const Cash = Cash_prev + Profit;
-  const OnTimeRatio = GrossProd===0? 0 : (Throughput/Math.max(1, Throughput+Rework));
-  const C_prev = s.C; const C = clamp01(C_prev + 0.2*OnTimeRatio - 0.1*(GrossProd===0?0:(Rework/Math.max(1,GrossProd))) - p.deltaC*C_prev);
-
-  s = {p, Backlog, Cash, H, F, C, S}; lastN=N; lastWs=Ws;
-  const row = {m,N,TrainPct,Ws,Throughput,Rework,Backlog,Profit,Cash,C};
-  hist.push(row); addLogRow(row); updateKPIs({Profit,Cash,Backlog,C,Throughput,Rework});
-  updateChart();
-
-  const msgs=[]; if(S>1.2) msgs.push('⚠️ فشار بالاست—ریسک خطا و بازکاری بالا می‌رود.');
-  if(TrainPct < 0.05 && H_prev < 0.7) msgs.push('⚠️ آموزش بسیار کم و قابلیت پایین؛ خطر تلهٔ قابلیت.');
-  if(N_up>0 && m>8) msgs.push('⚠️ افزودن تیم دیرهنگام ممکن است کمک نکند (هماهنگی/آنبوردینگ).');
-  if(Cash<0) msgs.push('⛔️ نقدینگی منفی—ورشکستگی!');
-  $("alerts").innerHTML = msgs.map(x=>`<div class="${x.includes('⛔️')?'bad':'warn'}">${x}</div>`).join('');
-
-  m++; $("mLabel").textContent = Math.min(m,months);
+  const Wl=1-Ws,Train_TM=TrainPct*N,AvailFrac=Math.max(0,1-Train_TM/Math.max(0.0001,N));
+  const H_prev=s.H,F_prev=s.F,S_prev=s.S;
+  const P_core=p.Pmin+p.gammaH*H_prev,Denom=1+p.gammaS*S_prev+p.gammaF*F_prev;
+  const P=(P_core/Denom)*AvailFrac;
+  const N_prev=(lastN==null?N:lastN),N_up=Math.max(0,N-N_prev);
+  const EffTeams=Math.max(0,N-(p.phi_coord*N*(N-1))-(p.phi_onb*N_up));
+  const Ws_prev=(lastWs==null?Ws:lastWs),PriorityEff=1-p.psi*Math.abs(Ws-Ws_prev);
+  const GrossProd=EffTeams*P*PriorityEff;
+  const Q=Math.min(0.9,0.3+0.6*H_prev);
+  const StressEff=1+p.rhoS*S_prev;
+  const ReworkRate=Math.min(0.9,Math.max(0,p.rho0*StressEff*(1-Q+p.rhoH*(1-H_prev))));
+  const Rework=ReworkRate*GrossProd;
+  const Throughput=Math.max(0,GrossProd-Rework);
+  const Backlog=s.Backlog-Throughput+p.NewWork;
+  const S_next=p.kappa*Backlog/Math.max(1,p.TargetBacklog);
+  const F=F_prev+p.eta1*(N?(GrossProd/N):0)-p.eta2*(N?(Train_TM/N):0)-p.deltaF*F_prev;
+  const H=H_prev+p.alpha*Train_TM-p.deltaH*H_prev;
+  const Revenue=(p.pi_s*Ws+p.pi_l*Wl)*Throughput,CoordCost=p.ccoord*N*(N-1);
+  const Cost=p.cteam*N+Train_TM+CoordCost+p.crework*Rework,Profit=Revenue-Cost;
+  const Cash=s.Cash+Profit;
+  const OnTimeRatio=GrossProd===0?0:(Throughput/Math.max(1,Throughput+Rework));
+  const C=clamp01(s.C+0.2*OnTimeRatio-0.1*(GrossProd===0?0:(Rework/Math.max(1,GrossProd)))-p.deltaC*s.C);
+  s={p,Backlog,Cash,H,F,C,S:S_next};lastN=N;lastWs=Ws;
+  const row={m,N,TrainPct,Ws,Throughput,Rework,Backlog,Profit,Cash,C};
+  hist.push(row);addLogRow(row);updateKPIs(row);updateChart();
+  const msgs=[];if(S_next>1.2)msgs.push('⚠️ فشار بالاست—ریسک خطا و بازکاری بالا می‌رود.');if(TrainPct<0.05&&H_prev<0.7)msgs.push('⚠️ آموزش کم و قابلیت پایین');if(N_up>0&&m>8)msgs.push('⚠️ افزودن تیم دیرهنگام ممکن است کمک نکند');if(Cash<0)msgs.push('⛔️ ورشکستگی');
+  $("alerts").innerHTML=msgs.map(x=>`<div class="${x.includes('⛔️')?'bad':'warn'}">${x}</div>`).join('');
+  m++;$("mLabel").textContent=Math.min(m,months);
 }
 
 function addLogRow(r){
-  const tr = document.createElement('tr');
-  tr.innerHTML = `<td>${r.m}</td><td>${r.N}</td><td>${r.TrainPct.toFixed(2)}</td><td>${r.Ws.toFixed(2)}</td><td>${r.Throughput.toFixed(2)}</td><td>${r.Rework.toFixed(2)}</td><td>${r.Backlog.toFixed(2)}</td><td>${r.Profit.toFixed(2)}</td><td>${r.Cash.toFixed(2)}</td><td>${r.C.toFixed(2)}</td>`;
-  $("logTbl").querySelector('tbody').appendChild(tr);
+  const tr=document.createElement("tr");
+  tr.innerHTML=
+    `<td>${r.m}</td><td>${r.N}</td><td>${r.TrainPct.toFixed(2)}</td><td>${r.Ws.toFixed(2)}</td>`+
+    `<td>${r.Throughput.toFixed(2)}</td><td>${r.Rework.toFixed(2)}</td><td>${r.Backlog.toFixed(2)}</td>`+
+    `<td>${r.Profit.toFixed(2)}</td><td>${r.Cash.toFixed(2)}</td><td>${r.C.toFixed(2)}</td>`;
+  $("logTbl").querySelector("tbody").appendChild(tr);
 }
 
 function updateKPIs(k){
-  $("kProfit").textContent = k? nf(k.Profit): '–'; $("kCash").textContent   = k? nf(k.Cash)  : '–';
-  $("kBacklog").textContent= k? nf(k.Backlog): '–'; $("kC").textContent      = k? k.C.toFixed(2): '–';
-  $("kTh").textContent     = k? nf(k.Throughput): '–'; $("kRw").textContent     = k? nf(k.Rework)   : '–';
+  $("kProfit").textContent=k?nf(k.Profit):"–";
+  $("kCash").textContent=k?nf(k.Cash):"–";
+  $("kBacklog").textContent=k?nf(k.Backlog):"–";
+  $("kC").textContent=k?k.C.toFixed(2):"–";
+  $("kTh").textContent=k?nf(k.Throughput):"–";
+  $("kRw").textContent=k?nf(k.Rework):"–";
 }
 
-function nf(x){return Number(x).toFixed(2)}
-function clamp(x,a,b){return Math.min(Math.max(x,a),b)}
-function clamp01(x){return clamp(x,0,1)}
-
-// ======= CSV =======
-$("dlCsv").addEventListener('click', ()=>{
-  if(hist.length===0){alert('اول چند ماه بازی کن بعد دانلود کن.');return}
-  const headers = ['Month','N','Train%','Ws','Throughput','Rework','Backlog','Profit','Cash','C'];
-  const rows = hist.map(r=>[r.m,r.N,r.TrainPct,r.Ws,r.Throughput,r.Rework,r.Backlog,r.Profit,r.Cash,r.C]);
-  const csv = [headers.join(','), ...rows.map(a=>a.join(','))].join('
+// CSV
+function downloadCsv(){
+  if(hist.length===0){alert("اول چند ماه بازی کن بعد دانلود کن.");return;}
+  const headers=['Month','N','Train%','Ws','Throughput','Rework','Backlog','Profit','Cash','C'];
+  const rows=hist.map(r=>[r.m,r.N,r.TrainPct,r.Ws,r.Throughput,r.Rework,r.Backlog,r.Profit,r.Cash,r.C]);
+  const csv=[headers.join(','),...rows.map(a=>a.join(','))].join('
 ');
-  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob); const a = document.createElement('a');
-  a.href=url; a.download='system-thinking-ceo-results.csv'; a.click(); URL.revokeObjectURL(url);
-});
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='system-thinking-ceo-results.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
 
-// ======= Chart (Cash, Backlog, Throughput, C, Rework) =======
-const ctx = document.getElementById('chart');
-const chart = new Chart(ctx, {
-  type:'line',
-  data:{ labels:[], datasets:[
-    {label:'Cash', data:[], tension:.35},
-    {label:'Backlog', data:[], tension:.35},
-    {label:'Throughput', data:[], tension:.35},
-    {label:'C (Satisfaction)', data:[], tension:.35, yAxisID:'y1'},
-    {label:'Rework', data:[], tension:.35}
-  ]},
-  options:{
-    interaction:{mode:'index', intersect:false},
-    plugins:{legend:{labels:{font:{family:'Vazirmatn'}}}},
-    scales:{
-      x:{ticks:{font:{family:'Vazirmatn'}}, grid:{color:'rgba(255,255,255,.06)'}},
-      y:{grid:{color:'rgba(255,255,255,.06)'}},
-      y1:{position:'right', grid:{drawOnChartArea:false}, suggestedMin:0, suggestedMax:1}
+// Chart: Cash, Backlog, Throughput, C (right axis), Rework
+function makeChart(){
+  const ctx=$("chart");
+  chart=new Chart(ctx,{
+    type:'line',
+    data:{labels:[],datasets:[
+      {label:'Cash',data:[],tension:.35},
+      {label:'Backlog',data:[],tension:.35},
+      {label:'Throughput',data:[],tension:.35},
+      {label:'C (Satisfaction)',data:[],tension:.35,yAxisID:'y1'},
+      {label:'Rework',data:[],tension:.35}
+    ]},
+    options:{
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{font:{family:'Vazirmatn'}}}},
+      scales:{
+        x:{ticks:{font:{family:'Vazirmatn'}},grid:{color:'rgba(255,255,255,.06)'}},
+        y:{grid:{color:'rgba(255,255,255,.06)'}},
+        y1:{position:'left',grid:{drawOnChartArea:false},suggestedMin:0,suggestedMax:1}
+      }
     }
-  }
-});
+  });
+}
+
 function updateChart(){
-  const r = hist[hist.length-1];
+  const r=hist[hist.length-1];
   chart.data.labels.push('M'+r.m);
   chart.data.datasets[0].data.push(+r.Cash.toFixed(2));
   chart.data.datasets[1].data.push(+r.Backlog.toFixed(2));
@@ -241,24 +257,25 @@ function updateChart(){
   chart.update();
 }
 
-// ======= URL prefill for inputs =======
-(function(){
-  const u = new URL(location.href).searchParams;
-  if(u.get('N')) $("N").value = +u.get('N');
-  if(u.get('Train')) { $("TrainPct").value = $("TrainPctBox").value = +u.get('Train'); }
-  if(u.get('Ws')) { $("Ws").value = $("WsBox").value = +u.get('Ws'); }
-})();
+document.addEventListener("DOMContentLoaded", () => {
+  $("TrainPct").addEventListener("input", e => $("TrainPctBox").value = e.target.value);
+  $("TrainPctBox").addEventListener("input", e => $("TrainPct").value = e.target.value);
+  $("Ws").addEventListener("input", e => $("WsBox").value = e.target.value);
+  $("WsBox").addEventListener("input", e => $("Ws").value = e.target.value);
 
-// ======= UI wiring =======
-$("TrainPct").addEventListener('input', e=> $("TrainPctBox").value = e.target.value);
-$("TrainPctBox").addEventListener('input', e=> $("TrainPct").value = e.target.value);
-$("Ws").addEventListener('input', e=> $("WsBox").value = e.target.value);
-$("WsBox").addEventListener('input', e=> $("Ws").value = e.target.value);
-$("nextBtn").addEventListener('click', ()=>{ if(m<=months && s.Cash>=0){ stepOnce(); } });
-$("autoBtn").addEventListener('click', ()=>{ while(m<=months && s.Cash>=0){ stepOnce(); } });
-$("resetBtn").addEventListener('click', init);
+  $("nextBtn").addEventListener("click", () => { if (m <= months && Number(s.Cash) >= 0) stepOnce(); });
+  $("autoBtn").addEventListener("click", () => { while (m <= months && Number(s.Cash) >= 0) stepOnce(); });
+  $("resetBtn").addEventListener("click", init);
+  $("dlCsv").addEventListener("click", downloadCsv);
 
-init();
+  const u=new URL(location.href).searchParams;
+  if(u.get("N")) $("N").value=+u.get("N");
+  if(u.get("Train")) { $("TrainPct").value = $("TrainPctBox").value = +u.get("Train"); }
+  if(u.get("Ws")) { $("Ws").value = $("WsBox").value = +u.get("Ws"); }
+
+  makeChart();
+  init();
+});
 </script>
 </body>
 </html>
